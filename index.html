@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="InsureAI - Intelligent Insurance Claim Assessment System">
+    <meta name="theme-color" content="#1B382D">
+    <title>InsureAI | Insurance Claim Assessment</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-layout">
+    <aside class="sidebar" id="sidebar">
+        <a class="sidebar-logo" href="#" data-go="dashboard" aria-label="InsureAI home">
+            <span class="logo-mark">I</span>
+            <span class="logo-copy"><strong>InsureAI</strong><small>INTELLIGENT CLAIM ASSESSMENT</small></span>
+        </a>
+
+        <div class="nav-caption">WORKSPACE</div>
+        <nav class="sidebar-nav" aria-label="Main navigation">
+            <button class="menu-item active" data-section="dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></button>
+            <button class="menu-item" data-section="new-claim"><span class="nav-icon">＋</span><span>New Claim Analysis</span></button>
+            <button class="menu-item" data-section="results"><span class="nav-icon">▤</span><span>Analysis Results</span></button>
+            <button class="menu-item" data-section="history"><span class="nav-icon">◷</span><span>Claim History</span></button>
+        </nav>
+
+        <div class="sidebar-note">
+            <span class="note-icon">✳</span>
+            <strong>Smarter claim reviews</strong>
+            <p>Organise claim information and prepare it for intelligent assessment.</p>
+        </div>
+        <div class="sidebar-footer">
+            <span class="online-dot"></span> Frontend workspace
+            <small>InsureAI · Version 1.0</small>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button type="button" class="mobile-menu" id="mobileMenu" aria-label="Open navigation" aria-expanded="false">☰</button>
+                <div>
+                    <div class="eyebrow">INSURANCE INTELLIGENCE PLATFORM</div>
+                    <h1 id="pageTitle">Dashboard</h1>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <span class="system-status"><span class="online-dot"></span> Frontend active</span>
+                <div class="avatar">IA</div>
+            </div>
+        </header>
+
+        <!-- DASHBOARD -->
+        <section id="dashboard" class="content-section active">
+            <div class="welcome-section">
+                <div class="welcome-copy">
+                    <span class="welcome-kicker">CLAIMS WORKSPACE</span>
+                    <h2>Make every claim<br><em>easier to assess.</em></h2>
+                    <p>Bring policyholder, incident and financial information together in one organised claim assessment workspace.</p>
+                    <button type="button" class="primary-button light-button" data-go="new-claim">Start new analysis <span>→</span></button>
+                </div>
+                <div class="welcome-art" aria-hidden="true">
+                    <div class="art-ring ring-one"></div><div class="art-ring ring-two"></div>
+                    <div class="art-document"><span class="doc-check">✓</span><i></i><i></i><i class="short-line"></i><b></b></div>
+                    <div class="art-orbit orbit-dot"></div>
+                </div>
+                <div class="welcome-watermark">IA</div>
+            </div>
+
+            <div class="section-title-row">
+                <div><span class="eyebrow">AT A GLANCE</span><h2>Claims overview</h2></div>
+                <span class="updated-label">Updates automatically</span>
+            </div>
+
+            <div class="stats-grid">
+                <article class="stat-card"><div class="stat-top"><span class="stat-label">Total claims submitted</span><span class="stat-symbol">▤</span></div><h3 id="totalClaims">0</h3><p class="stat-foot">All saved claim records</p></article>
+                <article class="stat-card"><div class="stat-top"><span class="stat-label">Pending analysis</span><span class="stat-symbol amber">◷</span></div><h3 id="pendingClaims">0</h3><p class="stat-foot">Awaiting backend assessment</p></article>
+                <article class="stat-card"><div class="stat-top"><span class="stat-label">Total claim value</span><span class="stat-symbol">₹</span></div><h3 id="totalClaimValue">₹0</h3><p class="stat-foot">Combined submitted amount</p></article>
+                <article class="stat-card"><div class="stat-top"><span class="stat-label">Latest submission</span><span class="stat-symbol sage">▦</span></div><h3 class="date-stat" id="latestSubmission">—</h3><p class="stat-foot">Most recent saved claim</p></article>
+            </div>
+
+            <div class="dashboard-columns">
+                <section class="panel workflow-panel">
+                    <div class="panel-heading"><div><span class="eyebrow">THE PROCESS</span><h2>How InsureAI works</h2></div></div>
+                    <div class="workflow-list">
+                        <div class="workflow-step"><span class="step-number">01</span><div><h3>Submit claim details</h3><p>Capture policyholder, incident, financial and vehicle information.</p></div><span class="step-arrow">↗</span></div>
+                        <div class="workflow-step"><span class="step-number">02</span><div><h3>Assess potential risk</h3><p>The connected ML model can evaluate the claim for potential fraud indicators.</p></div><span class="step-arrow">↗</span></div>
+                        <div class="workflow-step"><span class="step-number">03</span><div><h3>Support a decision</h3><p>Decision-support logic can help route claims for approval or further review.</p></div><span class="step-arrow">↗</span></div>
+                    </div>
+                </section>
+                <section class="panel readiness-panel">
+                    <span class="eyebrow">SYSTEM NOTE</span>
+                    <div class="readiness-icon">⌁</div>
+                    <h2>Ready for assessment</h2>
+                    <p>The frontend stores submitted claim records in this browser. Model predictions will appear here after backend integration.</p>
+                    <button type="button" class="text-button" data-go="new-claim">Create a claim <span>→</span></button>
+                </section>
+            </div>
+
+            <section class="panel recent-panel">
+                <div class="panel-heading">
+                    <div><span class="eyebrow">LATEST ACTIVITY</span><h2>Recent claims</h2><p class="panel-subtitle">Your five most recently submitted records.</p></div>
+                    <button type="button" class="outline-button" data-go="history">View all claims <span>→</span></button>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table recent-table">
+                        <thead><tr><th>Claim reference</th><th>Incident type</th><th>Claim amount</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
+                        <tbody id="recentClaimsBody"><tr><td colspan="6" class="empty-cell">No recent claims yet. Your submitted claims will appear here.</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+
+        <!-- NEW CLAIM -->
+        <section id="new-claim" class="content-section">
+            <div class="page-intro">
+                <span class="eyebrow">CLAIM INTAKE</span>
+                <h2>New claim analysis</h2>
+                <p>Complete the information below to create a claim record for assessment.</p>
+            </div>
+            <div class="form-card">
+                <div class="form-card-heading">
+                    <div><span class="eyebrow">NEW SUBMISSION</span><h2>Insurance claim form</h2><p>Fields marked with an asterisk are required.</p></div>
+                    <span class="form-reference">INSUREAI / FORM 01</span>
+                </div>
+
+                <div class="form-progress-card">
+                    <div class="progress-heading"><div><strong>Form completion</strong><span id="formProgressDetails">0 of 0 fields completed</span></div><strong id="formProgressText">0%</strong></div>
+                    <div class="progress-track" role="progressbar" aria-label="Form completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="formProgressTrack"><div id="formProgressBar"></div></div>
+                    <p class="progress-hint">Complete each section to prepare the claim for submission.</p>
+                </div>
+
+                <form id="claimForm" novalidate>
+                    <div id="formSections"></div>
+                    <div class="form-actions">
+                        <p class="privacy-note"><span>▣</span> Claim details are saved locally in this browser.</p>
+                        <div class="form-action-buttons">
+                            <button type="button" class="secondary-button" id="resetForm">Reset form</button>
+                            <button type="submit" class="primary-button">Submit claim <span>→</span></button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- RESULTS -->
+        <section id="results" class="content-section">
+            <div class="page-intro">
+                <span class="eyebrow">CLAIM REPORT</span>
+                <h2>Analysis results</h2>
+                <p>Review the submitted claim record and its current assessment status.</p>
+            </div>
+            <div id="resultsCard" class="results-card">
+                <div class="empty-state">
+                    <div class="empty-state-icon">▤</div><h3>No claim selected</h3>
+                    <p>Submit a new claim or open a saved record from Claim History to view its report.</p>
+                    <button type="button" class="primary-button" data-go="new-claim">Start new analysis <span>→</span></button>
+                </div>
+            </div>
+        </section>
+
+        <!-- HISTORY -->
+        <section id="history" class="content-section">
+            <div class="page-intro">
+                <span class="eyebrow">RECORD MANAGEMENT</span>
+                <h2>Claim history</h2>
+                <p>Search, review and manage the claims submitted from this browser.</p>
+            </div>
+            <section class="panel history-panel">
+                <div class="history-toolbar">
+                    <div><h2>Submitted claims</h2><p><strong id="historyTotal">0</strong> records found</p></div>
+                    <div class="history-tools">
+                        <label class="search-box"><span>⌕</span><input type="search" id="historySearch" placeholder="Search claims..." aria-label="Search claim history"></label>
+                        <button type="button" class="outline-button" id="exportClaims">Export CSV ↓</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table history-table">
+                        <thead><tr><th>Claim reference</th><th>Incident type</th><th>Claim amount</th><th>Submission date</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody id="historyTableBody"><tr><td colspan="6" class="empty-cell">No claim records found.</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="history-footnote"><span>ⓘ</span> Records are stored in your browser's local storage and are not synced to a server.</div>
+            </section>
+        </section>
+
+        <footer class="app-footer"><span>© 2026 InsureAI</span><span>Intelligent Insurance Claim Assessment System</span></footer>
+    </main>
+</div>
+<div class="mobile-overlay" id="mobileOverlay"></div>
+<div id="notificationRegion" class="notification-region" aria-live="polite" aria-atomic="true"></div>
+<script src="script.js"></script>
+</body>
+</html>

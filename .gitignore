@@ -1,0 +1,31 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+
+# IDE files
+.vscode/
+
+# Unnecessary backup models
+backend/cost_model.pkl
+backend/cost_model_candidate.pkl
+backend/fraud_model.pkl
+
+# Temporary files
+*.log
+.DS_Store
+Thumbs.db
+# Root-level backup models
+/cost_model.pkl
+/fraud_model.pkl
