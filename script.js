@@ -317,7 +317,7 @@ const formData = [
 
 const STORAGE_KEY = "insureAI_claim_history";
 
-const API_URL = "http://127.0.0.1:5000/api/analyze";
+const API_URL = "https://insureai-backend-ar1y.onrender.com/";
 
 let notificationTimer = null;
 
