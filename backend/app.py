@@ -5,15 +5,176 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import re
+from pathlib import Path
+import threading
+
+from werkzeug.utils import secure_filename
+
+try:
+    import cv2
+    import numpy as np
+except Exception:
+    cv2 = None
+    np = None
+try:
+    from paddleocr import PaddleOCR
+except Exception:
+    PaddleOCR = None
+
+try:
+    import fitz
+except Exception:
+    fitz = None
 
 # ==========================================
 # INSUREAI - FLASK BACKEND
 # ==========================================
 
 app = Flask(__name__)
-CORS(app)
+cors_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get(
+        "INSUREAI_FRONTEND_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000",
+    ).split(",")
+    if origin.strip()
+]
+if any("*" in origin for origin in cors_origins):
+    raise RuntimeError("INSUREAI_FRONTEND_ORIGINS must list exact origins; wildcard CORS is disabled.")
+CORS(app, resources={r"/api/*": {"origins": cors_origins}}, supports_credentials=False)
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OCR_EXTENSIONS = {"jpg", "jpeg", "png", "pdf"}
+_ocr_engine = None
+_ocr_engine_lock = threading.Lock()
+_ocr_inference_lock = threading.Lock()
+
+
+def get_ocr_engine():
+    global _ocr_engine
+    if PaddleOCR is None:
+        raise RuntimeError("OCR is unavailable. Install PaddleOCR and the CPU PaddlePaddle runtime.")
+    if _ocr_engine is None:
+        with _ocr_engine_lock:
+            if _ocr_engine is None:
+                _ocr_engine = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+    return _ocr_engine
+
+
+def run_ocr(image):
+    with _ocr_inference_lock:
+        return get_ocr_engine().ocr(image, cls=True)
+
+
+def preprocess_image(image):
+    if cv2 is None:
+        raise RuntimeError("OpenCV is unavailable. Install the optional OCR dependencies listed in requirements.txt.")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+    return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                 cv2.THRESH_BINARY, 31, 11)
+
+
+def structure_claim_text(text):
+    patterns = {
+        "claimant_name": [r"(?:patient|claimant|insured|customer|name)\s*[:#-]?\s*([A-Z][A-Za-z .'-]{2,})"],
+        "policy_number": [r"(?:policy(?:\s*(?:no|number))?)\s*[:#-]?\s*([A-Z0-9/-]{4,})"],
+        "claim_number": [r"(?:claim(?:\s*(?:no|number|#))?)\s*[:#-]?\s*([A-Z0-9/-]{3,})"],
+        "hospital_workshop_name": [r"(?:hospital|workshop|garage|clinic)\s*[:#-]?\s*([A-Z][A-Za-z0-9 &'.,-]{2,})"],
+        "invoice_number": [r"(?:invoice|bill)\s*(?:no|number|#)?\s*[:#-]?\s*([A-Z0-9/-]{3,})"],
+        "incident_date": [r"(?:date of (?:incident|accident)|incident date)\s*[:#-]?\s*([0-9]{1,4}[./-][0-9]{1,2}[./-][0-9]{1,4})"],
+        "treatment_repair_date": [r"(?:date of (?:treatment|repair)|treatment date|repair date)\s*[:#-]?\s*([0-9]{1,4}[./-][0-9]{1,2}[./-][0-9]{1,4})"],
+        "claim_amount": [r"(?:claim amount|amount claimed)\s*[:#-]?\s*(?:[$₹])?\s*([\d,]+(?:\.\d{1,2})?)"],
+        "total_bill_amount": [r"(?:grand total|total bill|total amount|amount due)\s*[:#-]?\s*(?:[$₹])?\s*([\d,]+(?:\.\d{1,2})?)"],
+        "description_of_incident": [r"(?:incident description|description of incident|accident details)\s*[:#-]?\s*(.{5,180})"],
+        "contact_information": [r"(?:\+?\d[\d ()-]{7,}\d|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})"]
+    }
+    fields, confidence = {}, {}
+    for field, expressions in patterns.items():
+        match = next((m for pattern in expressions if (m := re.search(pattern, text, re.I | re.M))), None)
+        value = match.group(1).strip(" .,:;\n") if match and match.lastindex else (match.group(0).strip() if match else None)
+        fields[field] = value
+        confidence[field] = None
+    for field in ("claim_amount", "total_bill_amount"):
+        if fields[field]:
+            fields[field] = float(fields[field].replace(",", ""))
+    return fields, confidence
+
+
+@app.errorhandler(413)
+def too_large(_error):
+    return jsonify({"status": "error", "message": "File exceeds the 12 MB upload limit."}), 413
+
+
+@app.route("/api/claims/ocr", methods=["POST"])
+def ocr_claim_document():
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"status": "error", "message": "Choose an image or PDF to process."}), 400
+    filename = secure_filename(upload.filename)
+    extension = Path(filename).suffix.lower().lstrip(".")
+    if extension not in OCR_EXTENSIONS:
+        return jsonify({"status": "error", "message": "Supported formats are JPG, JPEG, PNG, and PDF."}), 400
+    try:
+        if cv2 is None or np is None:
+            raise RuntimeError("Image processing is unavailable. Install the optional OCR dependencies listed in requirements.txt.")
+        payload = upload.read()
+        if not payload:
+            return jsonify({"status": "error", "message": "The uploaded file is empty."}), 400
+        get_ocr_engine()
+        lines, scores = [], []
+        page_count = 1
+        if extension == "pdf":
+            if fitz is None:
+                raise RuntimeError("PDF support is unavailable. Install PyMuPDF from requirements.txt.")
+            try:
+                document = fitz.open(stream=payload, filetype="pdf")
+            except Exception:
+                return jsonify({"status": "error", "message": "The PDF is invalid, damaged, or encrypted."}), 400
+            if document.page_count > 20:
+                return jsonify({"status": "error", "message": "PDFs may contain at most 20 pages."}), 400
+            page_count = document.page_count
+            if page_count == 0:
+                return jsonify({"status": "error", "message": "The PDF contains no pages."}), 400
+            for page in document:
+                largest_pt = max(page.rect.width, page.rect.height)
+                scale = min(2.0, 3500 / max(largest_pt, 1))
+                pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+                image = cv2.imdecode(np.frombuffer(pixmap.tobytes("png"), np.uint8), cv2.IMREAD_COLOR)
+                if image is not None:
+                    result = run_ocr(preprocess_image(image))
+                    for page_result in result or []:
+                        for item in page_result or []:
+                            lines.append(item[1][0])
+                            scores.append(float(item[1][1]))
+                del image, pixmap
+        else:
+            image = cv2.imdecode(np.frombuffer(payload, np.uint8), cv2.IMREAD_COLOR) if cv2 else None
+            if image is None:
+                return jsonify({"status": "error", "message": "The image could not be decoded."}), 400
+            if image.shape[0] * image.shape[1] > 20_000_000:
+                return jsonify({"status": "error", "message": "Image dimensions exceed the 20-megapixel processing limit."}), 400
+            result = run_ocr(preprocess_image(image))
+            for page in result or []:
+                for item in page or []:
+                    lines.append(item[1][0])
+                    scores.append(float(item[1][1]))
+        extracted_text = "\n".join(lines).strip()
+        if not extracted_text:
+            return jsonify({"status": "error", "message": "No readable text was found. Try a clearer image or enter claim details manually."}), 422
+        fields, field_confidence = structure_claim_text(extracted_text)
+        return jsonify({"status": "success", "extracted_text": extracted_text,
+                        "claim_information": fields, "confidence_scores": field_confidence,
+                        "ocr_confidence": round(sum(scores) / len(scores), 3) if scores else None,
+                        "fields_requiring_verification": list(fields.keys()),
+                        "pages_processed": page_count})
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except Exception:
+        app.logger.exception("Claim document OCR failed")
+        return jsonify({"status": "error", "message": "Document processing failed. Check file readability and try again."}), 500
 
 
 # ==========================================
@@ -269,6 +430,8 @@ def health():
         "status": "success",
         "message": "InsureAI backend is running!",
         "fraud_model": "Improved Random Forest",
+        "ocr_dependencies_available": PaddleOCR is not None and cv2 is not None and fitz is not None,
+        "ocr_model_initialized": _ocr_engine is not None,
         "fraud_threshold": FRAUD_THRESHOLD,
         "cost_models": [
             "Low-cost model",
@@ -417,7 +580,7 @@ def analyze_claim():
 
 if __name__ == "__main__":
     app.run(
-        debug=True,
-        host="127.0.0.1",
-        port=5000
+        debug=os.environ.get("FLASK_DEBUG", "false").lower() == "true",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "5000")),
     )

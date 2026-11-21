@@ -130,6 +130,16 @@
                     <p class="progress-hint">Complete each section to prepare the claim for submission.</p>
                 </div>
 
+                <section class="ocr-card" aria-labelledby="ocrTitle">
+                    <div class="ocr-heading"><div><span class="eyebrow">OPTIONAL DOCUMENT INTAKE</span><h3 id="ocrTitle">Upload Claim Document</h3><p>Extract details from a JPG, PNG, or PDF, then review them before adding them to the claim form.</p></div></div>
+                    <label class="ocr-dropzone" id="ocrDropzone" for="claimDocument"><span class="ocr-file-icon">▤</span><strong>Drop a document here</strong><span>or choose a file · JPG, JPEG, PNG, PDF · up to 12 MB</span><input id="claimDocument" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"></label>
+                    <div id="ocrFilePreview" class="ocr-file-preview" hidden></div>
+                    <div class="ocr-actions"><button type="button" class="secondary-button" id="removeOcrFile" hidden>Remove file</button><button type="button" class="primary-button" id="extractOcr" disabled>Extract Information <span>→</span></button></div>
+                    <div id="ocrProgress" class="ocr-progress" hidden><span class="ocr-spinner"></span><span id="ocrProgressText">Uploading and processing document…</span><div class="ocr-progress-track"><div id="ocrProgressBar"></div></div></div>
+                    <p id="ocrMessage" class="ocr-message" role="status" aria-live="polite"></p>
+                    <div id="ocrReview" class="ocr-review" hidden><h4>Review extracted information</h4><p>Values are estimates from OCR. Check each value and correct anything unclear before applying it.</p><div id="ocrFields" class="ocr-fields"></div><details class="ocr-raw"><summary>View recognized text</summary><pre id="ocrRawText"></pre></details><button type="button" class="primary-button" id="applyOcr">Confirm details and fill claim form <span>→</span></button></div>
+                </section>
+
                 <form id="claimForm" novalidate>
                     <div id="formSections"></div>
                     <div class="form-actions">
@@ -189,6 +199,7 @@
 </div>
 <div class="mobile-overlay" id="mobileOverlay"></div>
 <div id="notificationRegion" class="notification-region" aria-live="polite" aria-atomic="true"></div>
+<script src="api-config.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

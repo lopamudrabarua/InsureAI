@@ -317,9 +317,14 @@ const formData = [
 
 const STORAGE_KEY = "insureAI_claim_history";
 
-const API_URL = "https://insureai-backend-ar1y.onrender.com/";
+const API_BASE_URL = (window.INSUREAI_API_BASE ||
+  (location.hostname === "localhost" || location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:5000"
+    : "https://insureai-backend-ar1y.onrender.com")).replace(/\/+$/, "");
+const API_URL = `${API_BASE_URL}/api/analyze`;
 
 let notificationTimer = null;
+let confirmedDocumentDetails = null;
 
 
 /* ============================================================
@@ -1178,6 +1183,9 @@ function initializeClaimForm() {
 
       // Collect form information
       const claim = collectClaimData();
+      if (confirmedDocumentDetails) {
+        claim.document_details = confirmedDocumentDetails;
+      }
 
       // Send claim data to Flask backend
       const response = await fetch(API_URL, {
@@ -1229,6 +1237,7 @@ function initializeClaimForm() {
 
       // Reset form after successful analysis
       claimForm.reset();
+      document.getElementById("removeOcrFile")?.click();
 
       clearFormErrors();
       updateFormProgress();
@@ -1259,6 +1268,7 @@ function initializeClaimForm() {
   if (resetButton) {
     resetButton.addEventListener("click", function () {
       claimForm.reset();
+      document.getElementById("removeOcrFile")?.click();
 
       clearFormErrors();
       updateFormProgress();
@@ -1278,6 +1288,108 @@ function initializeClaimForm() {
       updateFormProgress();
     });
   }
+}
+
+function initializeClaimOcr() {
+  const input = document.getElementById("claimDocument");
+  const zone = document.getElementById("ocrDropzone");
+  const extract = document.getElementById("extractOcr");
+  const preview = document.getElementById("ocrFilePreview");
+  const remove = document.getElementById("removeOcrFile");
+  const message = document.getElementById("ocrMessage");
+  const review = document.getElementById("ocrReview");
+  let resultData = null;
+  let previewUrl = null;
+  if (!input) return;
+
+  const setFile = file => {
+    review.hidden = true;
+    resultData = null;
+    confirmedDocumentDetails = null;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    message.textContent = "";
+    if (!file) {
+      input.value = ""; preview.hidden = true; remove.hidden = true; extract.disabled = true; return;
+    }
+    const allowed = ["image/jpeg", "image/png", "application/pdf"];
+    if (!allowed.includes(file.type) || file.size > 12 * 1024 * 1024) {
+      message.textContent = file.size > 12 * 1024 * 1024 ? "File exceeds the 12 MB limit." : "Choose a JPG, PNG, or PDF file.";
+      message.className = "ocr-message error"; input.value = ""; return;
+    }
+    previewUrl = URL.createObjectURL(file);
+    preview.innerHTML = file.type === "application/pdf"
+      ? `<div class="pdf-preview">PDF</div><div><strong>${escapeHTML(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB · document ready</span></div>`
+      : `<img src="${previewUrl}" alt="Selected claim document preview"><div><strong>${escapeHTML(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB · image ready</span></div>`;
+    preview.hidden = false; remove.hidden = false; extract.disabled = false;
+    message.className = "ocr-message";
+  };
+  input.addEventListener("change", () => setFile(input.files[0]));
+  remove.addEventListener("click", () => setFile(null));
+  ["dragenter", "dragover"].forEach(name => zone.addEventListener(name, e => { e.preventDefault(); zone.classList.add("dragging"); }));
+  ["dragleave", "drop"].forEach(name => zone.addEventListener(name, e => { e.preventDefault(); zone.classList.remove("dragging"); }));
+  zone.addEventListener("drop", e => { if (e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; setFile(input.files[0]); } });
+  extract.addEventListener("click", async () => {
+    const file = input.files[0]; if (!file) return;
+    const progress = document.getElementById("ocrProgress");
+    progress.hidden = false; extract.disabled = true; remove.disabled = true;
+    message.textContent = ""; review.hidden = true;
+    const bar = document.getElementById("ocrProgressBar");
+    try {
+      const body = new FormData(); body.append("file", file);
+      const data = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${API_BASE_URL}/api/claims/ocr`);
+        xhr.upload.onprogress = event => {
+          if (!event.lengthComputable) return;
+          bar.style.width = `${Math.max(5, Math.round(event.loaded / event.total * 60))}%`;
+          document.getElementById("ocrProgressText").textContent = `Uploading document… ${Math.round(event.loaded / event.total * 100)}%`;
+        };
+        xhr.upload.onload = () => {
+          bar.style.width = "68%";
+          document.getElementById("ocrProgressText").textContent = "Upload complete · extracting text…";
+        };
+        xhr.onerror = () => reject(new Error("Failed to fetch"));
+        xhr.onload = () => {
+          let payload;
+          try { payload = JSON.parse(xhr.responseText); } catch { reject(new Error("OCR service returned an invalid response.")); return; }
+          if (xhr.status < 200 || xhr.status >= 300 || payload.status !== "success") reject(new Error(payload.message || "OCR processing failed."));
+          else resolve(payload);
+        };
+        xhr.send(body);
+      });
+      resultData = data;
+      document.getElementById("ocrRawText").textContent = data.extracted_text;
+      const labels = {claimant_name:"Claimant / patient name", policy_number:"Policy number", claim_number:"Claim number", hospital_workshop_name:"Hospital / workshop", invoice_number:"Invoice / bill number", incident_date:"Date of incident", treatment_repair_date:"Date of treatment / repair", claim_amount:"Claim amount", total_bill_amount:"Total bill amount", description_of_incident:"Incident description", contact_information:"Contact information"};
+      document.getElementById("ocrFields").innerHTML = Object.entries(data.claim_information).map(([key, value]) => `<label class="ocr-field"><span>${labels[key] || key}<small class="${value == null ? "manual-origin" : "auto-origin"}">${value == null ? "Needs manual entry" : "OCR detected · verify"}</small></span><input data-ocr-field="${key}" value="${escapeHTML(value ?? "")}" placeholder="Not found · enter manually"></label>`).join("");
+      review.hidden = false; bar.style.width = "100%";
+      message.textContent = `Text extracted from ${data.pages_processed} page(s). Review all values before applying.`;
+      message.className = "ocr-message success";
+    } catch (error) {
+      message.textContent = error.message.includes("Failed to fetch") ? "Could not reach the OCR service. Confirm the backend is running and supports this endpoint." : error.message;
+      message.className = "ocr-message error";
+    } finally {
+      setTimeout(() => { progress.hidden = true; bar.style.width = "0"; }, 500);
+      extract.disabled = false; remove.disabled = false;
+    }
+  });
+  document.getElementById("applyOcr").addEventListener("click", () => {
+    if (!resultData) return;
+    const fields = Object.fromEntries([...document.querySelectorAll("[data-ocr-field]")].map(el => [el.dataset.ocrField, el.value.trim()]));
+    confirmedDocumentDetails = fields;
+    const mapping = {incident_date:"incident_date"};
+    Object.entries(mapping).forEach(([source, target]) => {
+      const value = fields[source]; if (!value) return;
+      const control = document.querySelector(`#claimForm [name="${target}"]`);
+      if (control && (!control.value || source !== "claim_amount")) control.value = value;
+    });
+    const amount = fields.claim_amount || fields.total_bill_amount;
+    const amountControl = document.querySelector('#claimForm [name="total_claim_amount"]');
+    if (amount && amountControl) amountControl.value = amount;
+    updateFormProgress();
+    document.getElementById("formSections").scrollIntoView({behavior:"smooth", block:"start"});
+    showNotification("Reviewed OCR details applied. Complete the remaining required claim fields.");
+  });
 }
 
 
@@ -1646,6 +1758,7 @@ function initializeInsureAI() {
     generateForm();
 
     initializeClaimForm();
+    initializeClaimOcr();
 
     initializeHistorySearch();
 
