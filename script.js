@@ -996,7 +996,7 @@ function displayClaimResults(claim) {
 
         <div class="analysis-item">
           <span>Fraud risk level</span>
-          <strong>${escapeHTML(analysis.risk_state)}</strong>
+          <strong>${escapeHTML(analysis.risk_band || analysis.risk_state)}</strong>
         </div>
 
         <div class="analysis-item">
@@ -1014,6 +1014,23 @@ function displayClaimResults(claim) {
           <strong>${escapeHTML(analysis.decision)}</strong>
         </div>
       </div>
+
+      <div class="report-notice">
+        <div class="notice-icon">i</div>
+        <div>
+          <h3>Assessment indicators and review notes</h3>
+          <ul>${(analysis.indicators || []).map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul>
+          <ul>${(analysis.explanations || []).map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul>
+          <p>${analysis.manual_verification_required ? "Manual verification is recommended." : "No manual review was triggered by the configured model rules; verify claim documents through normal review."} Missing OCR fields are not fraud findings.</p>
+        </div>
+      </div>
+
+      ${claim.document_details ? `
+      <div class="report-section-title"><h3>Document details captured by OCR</h3><span>UNVERIFIED</span></div>
+      <div class="analysis-grid">${Object.entries(claim.document_details).filter(([, value]) => value).map(([key, value]) => `
+        <div class="analysis-item"><span>${escapeHTML(key.replaceAll("_", " "))}</span><strong>${escapeHTML(value)}</strong></div>
+      `).join("") || '<p>No values were recognized; enter and verify claim details manually.</p>'}</div>
+      ` : ""}
 
       <div class="report-notice">
         <div class="notice-icon">✓</div>

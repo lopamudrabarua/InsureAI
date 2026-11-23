@@ -425,6 +425,15 @@ def get_risk_state(probability):
     return "Low"
 
 
+def get_risk_band(probability):
+    """Expose a three-band view while retaining the trained model threshold."""
+    if probability >= FRAUD_THRESHOLD:
+        return "High"
+    if probability >= FRAUD_THRESHOLD * 0.5:
+        return "Medium"
+    return "Low"
+
+
 # ==========================================
 # Q-TABLE DECISION
 # ==========================================
@@ -556,6 +565,7 @@ def analyze_claim():
         risk_state = get_risk_state(
             fraud_probability
         )
+        risk_band = get_risk_band(fraud_probability)
 
         # 7. Generate final decision
         decision = get_rl_decision(
@@ -564,14 +574,20 @@ def analyze_claim():
         )
 
         # 8. Return complete analysis
+        probability_percent = round(fraud_probability * 100, 2)
+        explanations = [
+            f"The trained model estimated a {probability_percent:.2f}% fraud probability; its configured high-risk threshold is {FRAUD_THRESHOLD * 100:.2f}%.",
+            "The probability is a model estimate based on the submitted structured claim fields, not a verified finding.",
+        ]
+        if complexity == "High":
+            explanations.append("The claim has high incident complexity and should receive human review.")
+        explanations.append("Policy, provider, and duplicate-claim records were not checked against external sources.")
+
         return jsonify({
 
             "status": "success",
 
-            "fraud_probability": round(
-                fraud_probability * 100,
-                2
-            ),
+            "fraud_probability": probability_percent,
 
             "expected_cost": round(
                 expected_cost,
@@ -581,6 +597,17 @@ def analyze_claim():
             "complexity": complexity,
 
             "risk_state": risk_state,
+
+            "risk_band": risk_band,
+
+            "manual_verification_required": decision in ["Review", "Investigate"] or risk_band == "Medium",
+
+            "indicators": [
+                f"Model probability: {probability_percent:.2f}%",
+                f"Incident complexity: {complexity}",
+            ],
+
+            "explanations": explanations,
 
             "decision": decision
 
