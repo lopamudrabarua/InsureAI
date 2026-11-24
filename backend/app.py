@@ -718,14 +718,14 @@ def analyze_claim():
         complexity = calculate_complexity(data)
 
         # 6. Determine fraud risk
-        risk_state = get_risk_state(
-            fraud_probability
-        )
         risk_band = get_risk_band(fraud_probability)
+        # Keep legacy risk_state for backward compatibility
+        risk_state = get_risk_state(fraud_probability)
 
         # 7. Generate final decision
+        # Use risk_band (3-level: Low/Medium/High) for Q-table lookup
         decision = get_rl_decision(
-            risk_state,
+            risk_band,
             complexity
         )
 

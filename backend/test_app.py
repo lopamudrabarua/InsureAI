@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from backend import app as service
+import app as service
 
 
 class ClaimOcrApiTests(unittest.TestCase):

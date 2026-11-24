@@ -77,7 +77,7 @@ const formData = [
         name: "insured_sex",
         label: "Policyholder gender",
         type: "select",
-        options: ["MALE", "FEMALE", "OTHER"]
+        options: ["MALE", "FEMALE"]
       },
       {
         name: "insured_education_level",
@@ -96,19 +96,61 @@ const formData = [
       {
         name: "insured_occupation",
         label: "Policyholder occupation",
-        type: "text",
-        placeholder: "Enter occupation"
+        type: "select",
+        options: [
+          "prof-specialty",
+          "craft-repair",
+          "exec-managerial",
+          "adm-clerical",
+          "sales",
+          "other-service",
+          "machine-op-inspct",
+          "transport-moving",
+          "handlers-cleaners",
+          "farming-fishing",
+          "tech-support",
+          "protective-serv",
+          "armed-forces",
+          "priv-house-serv"
+        ]
       },
       {
         name: "insured_relationship",
         label: "Policyholder relationship",
         type: "select",
         options: [
-          "self",
-          "spouse",
-          "child",
-          "parent",
+          "husband",
+          "wife",
+          "own-child",
+          "unmarried",
           "other-relative",
+          "not-in-family"
+        ]
+      },
+      {
+        name: "insured_hobbies",
+        label: "Policyholder hobbies",
+        type: "select",
+        options: [
+          "driving",
+          "reading",
+          "gardening",
+          "sports",
+          "music",
+          "cooking",
+          "traveling",
+          "photography",
+          "gaming",
+          "hiking",
+          "swimming",
+          "cycling",
+          "fishing",
+          "hunting",
+          "yoga",
+          "dancing",
+          "painting",
+          "writing",
+          "meditation",
           "other"
         ]
       }
@@ -165,20 +207,28 @@ const formData = [
           "Police",
           "Fire",
           "Ambulance",
-          "Other",
-          "None"
+          "Other"
         ]
       },
       {
         name: "incident_state",
         label: "Incident state",
         type: "select",
-        options: ["OH", "IN", "IL"]
+        options: ["NC", "NY", "OH", "PA", "SC", "VA", "WV"]
       },
       {
         name: "incident_city",
         label: "Incident city",
-        type: "text"
+        type: "select",
+        options: [
+          "Hillsdale",
+          "New York City",
+          "Columbus",
+          "Philadelphia",
+          "Columbia",
+          "Arlington",
+          "Charleston"
+        ]
       },
       {
         name: "incident_location",
@@ -271,14 +321,76 @@ const formData = [
       {
         name: "auto_make",
         label: "Vehicle make",
-        type: "text",
-        placeholder: "Example: Toyota"
+        type: "select",
+        options: [
+          "Toyota",
+          "Ford",
+          "Honda",
+          "Chevrolet",
+          "Nissan",
+          "BMW",
+          "Mercedes-Benz",
+          "Dodge",
+          "Mazda",
+          "Saturn",
+          "Pontiac",
+          "Accura",
+          "Saab",
+          "Volkswagen"
+        ]
       },
       {
         name: "auto_model",
         label: "Vehicle model",
-        type: "text",
-        placeholder: "Example: Camry"
+        type: "select",
+        options: [
+          "Camry",
+          "Corolla",
+          "Accord",
+          "Civic",
+          "Maxima",
+          "Altima",
+          "Sentra",
+          "3 Series",
+          "5 Series",
+          "E-Class",
+          "C-Class",
+          "Ram",
+          "Dakota",
+          "Caravan",
+          "Grand Caravan",
+          "626",
+          "Protege",
+          "Millenia",
+          "SL",
+          "SC",
+          "Neon",
+          "Stratus",
+          "Intrepid",
+          "Grand Am",
+          "Sunfire",
+          "Bonneville",
+          "9000",
+          "900",
+          "9-3",
+          "9-5",
+          "Jetta",
+          "Passat",
+          "Golf",
+          "Contour",
+          "Taurus",
+          "Mustang",
+          "F-150",
+          "Explorer",
+          "Ranger",
+          "Windstar",
+          "Aerostar",
+          "Town Car",
+          "Continental",
+          "Sable",
+          "Tracer",
+          "Escort"
+        ]
       },
       {
         name: "auto_year",
