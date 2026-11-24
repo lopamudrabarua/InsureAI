@@ -51,37 +51,37 @@ const formData = [
       },
       {
         name: "policy_deductable",
-        label: "Policy deductible ($)",
+        label: "Policy deductible (₹)",
         type: "number",
         min: 0
       },
       {
         name: "policy_annual_premium",
-        label: "Annual premium ($)",
+        label: "Annual premium (₹)",
         type: "number",
         min: 0,
         step: "any"
       },
       {
         name: "umbrella_limit",
-        label: "Umbrella limit ($)",
+        label: "Umbrella limit (₹)",
         type: "number"
       },
       {
         name: "insured_zip",
-        label: "Insured ZIP code",
+        label: "Insured PIN code",
         type: "text",
-        placeholder: "Enter ZIP code"
+        placeholder: "Enter PIN code"
       },
       {
         name: "insured_sex",
-        label: "Insured sex",
+        label: "Policyholder gender",
         type: "select",
-        options: ["MALE", "FEMALE"]
+        options: ["MALE", "FEMALE", "OTHER"]
       },
       {
         name: "insured_education_level",
-        label: "Education level",
+        label: "Policyholder education",
         type: "select",
         options: [
           "High School",
@@ -95,40 +95,22 @@ const formData = [
       },
       {
         name: "insured_occupation",
-        label: "Occupation",
+        label: "Policyholder occupation",
         type: "text",
         placeholder: "Enter occupation"
       },
       {
-        name: "insured_hobbies",
-        label: "Hobbies",
-        type: "text",
-        placeholder: "Enter hobbies"
-      },
-      {
         name: "insured_relationship",
-        label: "Relationship",
+        label: "Policyholder relationship",
         type: "select",
         options: [
-          "husband",
-          "wife",
-          "own-child",
-          "unmarried",
+          "self",
+          "spouse",
+          "child",
+          "parent",
           "other-relative",
-          "not-in-family"
+          "other"
         ]
-      },
-      {
-        name: "capital-gains",
-        label: "Capital gains ($)",
-        type: "number",
-        step: "any"
-      },
-      {
-        name: "capital-loss",
-        label: "Capital loss ($)",
-        type: "number",
-        step: "any"
       }
     ]
   },
@@ -249,32 +231,32 @@ const formData = [
 
   {
     title: "03. Financial information",
-    description: "Enter the financial amounts associated with this claim (USD).",
+    description: "Enter the financial amounts associated with this claim (INR).",
     fields: [
       {
         name: "total_claim_amount",
-        label: "Total claim amount ($)",
+        label: "Total claim amount (₹)",
         type: "number",
         min: 0,
         step: "any"
       },
       {
         name: "injury_claim",
-        label: "Injury claim ($)",
+        label: "Injury claim (₹)",
         type: "number",
         min: 0,
         step: "any"
       },
       {
         name: "property_claim",
-        label: "Property claim ($)",
+        label: "Property claim (₹)",
         type: "number",
         min: 0,
         step: "any"
       },
       {
         name: "vehicle_claim",
-        label: "Vehicle claim ($)",
+        label: "Vehicle claim (₹)",
         type: "number",
         min: 0,
         step: "any"
@@ -381,9 +363,9 @@ function saveClaimHistory(claims) {
 ============================================================ */
 
 function formatCurrency(amount) {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "USD",
+    currency: "INR",
     maximumFractionDigits: 2
   }).format(Number(amount) || 0);
 }
@@ -1201,7 +1183,10 @@ function initializeClaimForm() {
       // Collect form information
       const claim = collectClaimData();
       if (confirmedDocumentDetails) {
-        claim.document_details = confirmedDocumentDetails;
+        claim.document_details = confirmedDocumentDetails.fields;
+        claim.document_ocr_text = confirmedDocumentDetails.extracted_text;
+        claim.document_ocr_pages = confirmedDocumentDetails.pages_processed;
+        claim.document_ocr_confidence = confirmedDocumentDetails.ocr_confidence;
       }
 
       // Send claim data to Flask backend
@@ -1315,100 +1300,246 @@ function initializeClaimOcr() {
   const remove = document.getElementById("removeOcrFile");
   const message = document.getElementById("ocrMessage");
   const review = document.getElementById("ocrReview");
-  let resultData = null;
+  const progress = document.getElementById("ocrProgress");
+  const progressText = document.getElementById("ocrProgressText");
+  const bar = document.getElementById("ocrProgressBar");
+  const progressTrack = progress?.querySelector(".ocr-progress-track");
+  if (!input || input.dataset.ocrInitialized === "true") return;
+  input.dataset.ocrInitialized = "true";
+
+  const state = {phase: "IDLE", file: null, result: null};
   let previewUrl = null;
-  if (!input) return;
+
+  const setMessage = (text = "", type = "") => {
+    message.textContent = text;
+    message.className = `ocr-message${type ? ` ${type}` : ""}`;
+    message.hidden = !text;
+  };
+
+  const stopProgress = () => {
+    progress.hidden = true;
+    progress.setAttribute("aria-busy", "false");
+    progress.classList.remove("is-processing");
+    progressTrack?.removeAttribute("aria-valuenow");
+    bar.style.width = "0%";
+  };
+
+  const setPhase = phase => {
+    state.phase = phase;
+    if (phase === "PROCESSING") {
+      progress.hidden = false;
+      progress.setAttribute("aria-busy", "true");
+      progress.classList.remove("is-processing");
+      progressText.textContent = "Uploading document...";
+      progressTrack?.setAttribute("aria-valuenow", "0");
+      bar.style.width = "0%";
+      input.disabled = true;
+      extract.disabled = true;
+      remove.disabled = true;
+      return;
+    }
+    stopProgress();
+    input.disabled = false;
+    remove.disabled = false;
+    extract.disabled = !state.file;
+  };
 
   const setFile = file => {
+    if (state.phase === "PROCESSING") return;
     review.hidden = true;
-    resultData = null;
+    state.result = null;
     confirmedDocumentDetails = null;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = null;
-    message.textContent = "";
+    setMessage();
     if (!file) {
-      input.value = ""; preview.hidden = true; remove.hidden = true; extract.disabled = true; return;
+      state.file = null;
+      input.value = "";
+      preview.hidden = true;
+      preview.replaceChildren();
+      remove.hidden = true;
+      setPhase("IDLE");
+      return;
     }
-    const allowed = ["image/jpeg", "image/png", "application/pdf"];
-    if (!allowed.includes(file.type) || file.size > 12 * 1024 * 1024) {
-      message.textContent = file.size > 12 * 1024 * 1024 ? "File exceeds the 12 MB limit." : "Choose a JPG, PNG, or PDF file.";
-      message.className = "ocr-message error"; input.value = ""; return;
+
+    const extension = file.name.split(".").pop().toLowerCase();
+    const acceptedTypes = {
+      jpg: ["image/jpeg", ""], jpeg: ["image/jpeg", ""],
+      png: ["image/png", ""], pdf: ["application/pdf", ""]
+    };
+    if (!(acceptedTypes[extension] || []).includes(file.type) || file.size <= 0 || file.size > 12 * 1024 * 1024) {
+      state.file = null;
+      input.value = "";
+      preview.hidden = true;
+      preview.replaceChildren();
+      remove.hidden = true;
+      setPhase("IDLE");
+      setMessage(file.size > 12 * 1024 * 1024
+        ? "File exceeds the 12 MB limit."
+        : "Choose a non-empty JPG, JPEG, PNG, or PDF file.", "error");
+      return;
     }
+
+    state.file = file;
     previewUrl = URL.createObjectURL(file);
-    preview.innerHTML = file.type === "application/pdf"
-      ? `<div class="pdf-preview">PDF</div><div><strong>${escapeHTML(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB · document ready</span></div>`
-      : `<img src="${previewUrl}" alt="Selected claim document preview"><div><strong>${escapeHTML(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB · image ready</span></div>`;
-    preview.hidden = false; remove.hidden = false; extract.disabled = false;
-    message.className = "ocr-message";
+    preview.innerHTML = extension === "pdf"
+      ? `<div class="pdf-preview">PDF</div><div><strong>${escapeHTML(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB - document ready</span></div>`
+      : `<img src="${previewUrl}" alt="Selected claim document preview"><div><strong>${escapeHTML(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB - image ready</span></div>`;
+    preview.hidden = false;
+    remove.hidden = false;
+    setPhase("FILE_SELECTED");
   };
+
+  // Establish an explicit, clean initial state and make initialization idempotent.
+  state.file = null;
+  state.result = null;
+  preview.hidden = true;
+  review.hidden = true;
+  remove.hidden = true;
+  setMessage();
+  setPhase("IDLE");
+
   input.addEventListener("change", () => setFile(input.files[0]));
   remove.addEventListener("click", () => setFile(null));
-  ["dragenter", "dragover"].forEach(name => zone.addEventListener(name, e => { e.preventDefault(); zone.classList.add("dragging"); }));
-  ["dragleave", "drop"].forEach(name => zone.addEventListener(name, e => { e.preventDefault(); zone.classList.remove("dragging"); }));
-  zone.addEventListener("drop", e => { if (e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; setFile(input.files[0]); } });
+  ["dragenter", "dragover"].forEach(name => zone.addEventListener(name, event => {
+    event.preventDefault();
+    if (state.phase !== "PROCESSING") zone.classList.add("dragging");
+  }));
+  ["dragleave", "drop"].forEach(name => zone.addEventListener(name, event => {
+    event.preventDefault();
+    zone.classList.remove("dragging");
+  }));
+  zone.addEventListener("drop", event => {
+    if (state.phase === "PROCESSING") return;
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    setFile(file);
+  });
+
   extract.addEventListener("click", async () => {
-    const file = input.files[0]; if (!file) return;
-    const progress = document.getElementById("ocrProgress");
-    progress.hidden = false; extract.disabled = true; remove.disabled = true;
-    message.textContent = ""; review.hidden = true;
-    const bar = document.getElementById("ocrProgressBar");
+    if (state.phase === "PROCESSING") return;
+    if (!state.file) {
+      setMessage("Choose a document before extracting information.", "error");
+      return;
+    }
+
+    const file = state.file;
+    state.result = null;
+    review.hidden = true;
+    setMessage();
+
     try {
-      const body = new FormData(); body.append("file", file);
+      setPhase("PROCESSING");
       const data = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${API_BASE_URL}/api/claims/ocr`);
+        xhr.timeout = 550000;
         xhr.upload.onprogress = event => {
           if (!event.lengthComputable) return;
-          bar.style.width = `${Math.max(5, Math.round(event.loaded / event.total * 60))}%`;
-          document.getElementById("ocrProgressText").textContent = `Uploading document… ${Math.round(event.loaded / event.total * 100)}%`;
+          const percent = Math.round(event.loaded / event.total * 100);
+          progressText.textContent = `Uploading document... ${percent}%`;
+          progressTrack?.setAttribute("aria-valuenow", String(percent));
+          bar.style.width = `${percent}%`;
         };
         xhr.upload.onload = () => {
-          bar.style.width = "68%";
-          document.getElementById("ocrProgressText").textContent = "Upload complete · extracting text…";
+          // Upload is complete; OCR duration is unknown, so use an indeterminate state.
+          bar.style.width = "";
+          progress.classList.add("is-processing");
+          progressTrack?.removeAttribute("aria-valuenow");
+          progressText.textContent = "Upload complete. Processing document pages with Tesseract...";
         };
-        xhr.onerror = () => reject(new Error("Failed to fetch"));
         xhr.onload = () => {
           let payload;
-          try { payload = JSON.parse(xhr.responseText); } catch { reject(new Error("OCR service returned an invalid response.")); return; }
-          if (xhr.status < 200 || xhr.status >= 300 || payload.status !== "success") reject(new Error(payload.message || "OCR processing failed."));
-          else resolve(payload);
+          try {
+            payload = JSON.parse(xhr.responseText);
+          } catch {
+            reject(new Error(`OCR service returned an invalid response (HTTP ${xhr.status}).`));
+            return;
+          }
+          if (xhr.status < 200 || xhr.status >= 300 || payload.status !== "success") {
+            reject(new Error(payload.message || `OCR processing failed (HTTP ${xhr.status}).`));
+            return;
+          }
+          if (typeof payload.extracted_text !== "string" || !payload.extracted_text.trim() ||
+              !payload.claim_information || typeof payload.claim_information !== "object" ||
+              !Number.isInteger(payload.pages_processed) || payload.pages_processed < 1) {
+            reject(new Error("OCR service returned incomplete extraction data. Please retry or choose another file."));
+            return;
+          }
+          resolve(payload);
         };
+        xhr.onerror = () => reject(new Error("Could not reach the OCR service. Confirm the backend is running and try again."));
+        xhr.ontimeout = () => reject(new Error("Document processing timed out. Try a smaller file or fewer PDF pages, then retry."));
+        xhr.onabort = () => reject(new Error("Document processing was interrupted. Please retry."));
+        const body = new FormData();
+        body.append("file", file);
         xhr.send(body);
       });
-      resultData = data;
+
+      state.result = data;
       document.getElementById("ocrRawText").textContent = data.extracted_text;
-      const labels = {claimant_name:"Claimant / patient name", policy_number:"Policy number", claim_number:"Claim number", hospital_workshop_name:"Hospital / workshop", invoice_number:"Invoice / bill number", incident_date:"Date of incident", treatment_repair_date:"Date of treatment / repair", claim_amount:"Claim amount", total_bill_amount:"Total bill amount", description_of_incident:"Incident description", contact_information:"Contact information"};
-      document.getElementById("ocrFields").innerHTML = Object.entries(data.claim_information).map(([key, value]) => `<label class="ocr-field"><span>${labels[key] || key}<small class="${value == null ? "manual-origin" : "auto-origin"}">${value == null ? "Needs manual entry" : "OCR detected · verify"}</small></span><input data-ocr-field="${key}" value="${escapeHTML(value ?? "")}" placeholder="Not found · enter manually"></label>`).join("");
-      review.hidden = false; bar.style.width = "100%";
-      message.textContent = `Text extracted from ${data.pages_processed} page(s). Review all values before applying.`;
-      message.className = "ocr-message success";
+      const labels = {
+        insured_person_name: "Insured person name", policy_number: "Policy number",
+        claim_number: "Claim number / reference", member_id: "Member ID",
+        contact_information: "Contact information", claim_type: "Claim type",
+        incident_date: "Incident date", vehicle_release_date: "Vehicle release date",
+        vehicle_damage_description: "Vehicle damage description", surveyor_name: "Surveyor name",
+        repair_garage_name: "Repair garage name", repair_garage_address: "Repair garage address",
+        total_repair_estimate: "Total repair estimate", amount_claimed: "Amount claimed",
+        vehicle_inspection_date: "Date of vehicle inspection", invoice_number: "Invoice number"
+      };
+      const confidence = data.confidence_scores || {};
+      const statuses = data.extraction_status || {};
+      const legacyAliases = new Set(["policyholder_name", "amount_claimed"]);
+      document.getElementById("ocrFields").innerHTML = Object.entries(data.claim_information)
+        .filter(([key]) => !legacyAliases.has(key))
+        .map(([key, value]) => {
+          const score = confidence[key];
+          const status = statuses[key] === "not_found" || !value ? "Not found - enter manually" : typeof score === "number" && score < 0.75 ? "Low confidence - verify" : "Extracted - verify before use";
+          return `<label class="ocr-field"><span>${escapeHTML(labels[key] || key)}<small class="${!value || status.startsWith("Low confidence") ? "manual-origin" : "auto-origin"}">${status}</small></span><input data-ocr-field="${escapeHTML(key)}" value="${escapeHTML(value ?? "")}" placeholder="Not found - enter manually"></label>`;
+        }).join("");
+      review.hidden = false;
+      state.phase = "SUCCESS";
+      setMessage(`Text extracted from ${data.pages_processed} page(s). OCR confidence: ${typeof data.ocr_confidence === "number" ? `${Math.round(data.ocr_confidence * 100)}%` : "unavailable for embedded PDF text"}. Review values before applying.`, "success");
     } catch (error) {
-      message.textContent = error.message.includes("Failed to fetch") ? "Could not reach the OCR service. Confirm the backend is running and supports this endpoint." : error.message;
-      message.className = "ocr-message error";
+      state.phase = "ERROR";
+      setMessage(error.message || "Document processing failed. Please try again.", "error");
     } finally {
-      setTimeout(() => { progress.hidden = true; bar.style.width = "0"; }, 500);
-      extract.disabled = false; remove.disabled = false;
+      // This runs for success, service errors, invalid payloads, timeouts and aborted requests.
+      stopProgress();
+      input.disabled = false;
+      remove.disabled = false;
+      extract.disabled = !state.file;
+      if (state.phase === "PROCESSING") state.phase = "ERROR";
     }
   });
+
   document.getElementById("applyOcr").addEventListener("click", () => {
-    if (!resultData) return;
+    if (!state.result) return;
     const fields = Object.fromEntries([...document.querySelectorAll("[data-ocr-field]")].map(el => [el.dataset.ocrField, el.value.trim()]));
-    confirmedDocumentDetails = fields;
-    const mapping = {incident_date:"incident_date"};
-    Object.entries(mapping).forEach(([source, target]) => {
-      const value = fields[source]; if (!value) return;
-      const control = document.querySelector(`#claimForm [name="${target}"]`);
-      if (control && (!control.value || source !== "claim_amount")) control.value = value;
-    });
-    const amount = fields.claim_amount || fields.total_bill_amount;
+    confirmedDocumentDetails = {
+      fields,
+      extracted_text: state.result.extracted_text || "",
+      pages_processed: state.result.pages_processed || 0,
+      ocr_confidence: state.result.ocr_confidence ?? null,
+      confidence_scores: state.result.confidence_scores || {},
+      extraction_status: state.result.extraction_status || {},
+      original_values: state.result.original_values || {}
+    };
+    const incidentDate = fields.incident_date;
+    const dateControl = document.querySelector('#claimForm [name="incident_date"]');
+    if (incidentDate && dateControl && !dateControl.value) dateControl.value = incidentDate;
+    const amount = fields.total_repair_estimate || fields.amount_claimed;
     const amountControl = document.querySelector('#claimForm [name="total_claim_amount"]');
-    if (amount && amountControl) amountControl.value = amount;
+    if (amount && amountControl && !amountControl.value) amountControl.value = amount;
     updateFormProgress();
     document.getElementById("formSections").scrollIntoView({behavior:"smooth", block:"start"});
-    showNotification("Reviewed OCR details applied. Complete the remaining required claim fields.");
+    showNotification("Reviewed document details are attached. Complete and verify the claim form before submission.");
   });
 }
-
 
 /* ============================================================
    16. CLAIM HISTORY DISPLAY

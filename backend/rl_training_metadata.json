@@ -1,0 +1,36 @@
+{
+  "n_states": 18,
+  "n_actions": 3,
+  "alpha": 0.1,
+  "gamma": 0.95,
+  "episodes": 5000,
+  "accuracy": 0.965,
+  "avg_reward": 15.048,
+  "fraud_threshold": 0.25,
+  "median_cost": 59085.46578293123,
+  "actions": [
+    "Approve",
+    "Review",
+    "Investigate"
+  ],
+  "state_mapping": {
+    "('Low', 'Low', 'Low')": 0,
+    "('Low', 'Low', 'High')": 1,
+    "('Low', 'Medium', 'Low')": 2,
+    "('Low', 'Medium', 'High')": 3,
+    "('Low', 'High', 'Low')": 4,
+    "('Low', 'High', 'High')": 5,
+    "('Medium', 'Low', 'Low')": 6,
+    "('Medium', 'Low', 'High')": 7,
+    "('Medium', 'Medium', 'Low')": 8,
+    "('Medium', 'Medium', 'High')": 9,
+    "('Medium', 'High', 'Low')": 10,
+    "('Medium', 'High', 'High')": 11,
+    "('High', 'Low', 'Low')": 12,
+    "('High', 'Low', 'High')": 13,
+    "('High', 'Medium', 'Low')": 14,
+    "('High', 'Medium', 'High')": 15,
+    "('High', 'High', 'Low')": 16,
+    "('High', 'High', 'High')": 17
+  }
+}

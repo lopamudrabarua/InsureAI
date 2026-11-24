@@ -135,8 +135,8 @@
                     <label class="ocr-dropzone" id="ocrDropzone" for="claimDocument"><span class="ocr-file-icon">▤</span><strong>Drop a document here</strong><span>or choose a file · JPG, JPEG, PNG, PDF · up to 12 MB</span><input id="claimDocument" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"></label>
                     <div id="ocrFilePreview" class="ocr-file-preview" hidden></div>
                     <div class="ocr-actions"><button type="button" class="secondary-button" id="removeOcrFile" hidden>Remove file</button><button type="button" class="primary-button" id="extractOcr" disabled>Extract Information <span>→</span></button></div>
-                    <div id="ocrProgress" class="ocr-progress" hidden><span class="ocr-spinner"></span><span id="ocrProgressText">Uploading and processing document…</span><div class="ocr-progress-track"><div id="ocrProgressBar"></div></div></div>
-                    <p id="ocrMessage" class="ocr-message" role="status" aria-live="polite"></p>
+                    <div id="ocrProgress" class="ocr-progress" aria-busy="false" hidden><span class="ocr-spinner"></span><span id="ocrProgressText">Uploading and processing document…</span><div class="ocr-progress-track" role="progressbar" aria-label="Document upload progress" aria-valuemin="0" aria-valuemax="100"><div id="ocrProgressBar"></div></div></div>
+                    <p id="ocrMessage" class="ocr-message" role="status" aria-live="polite" hidden></p>
                     <div id="ocrReview" class="ocr-review" hidden><h4>Review extracted information</h4><p>Values are estimates from OCR. Check each value and correct anything unclear before applying it.</p><div id="ocrFields" class="ocr-fields"></div><details class="ocr-raw"><summary>View recognized text</summary><pre id="ocrRawText"></pre></details><button type="button" class="primary-button" id="applyOcr">Confirm details and fill claim form <span>→</span></button></div>
                 </section>
 

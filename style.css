@@ -2101,12 +2101,16 @@ body {
 .ocr-file-preview span { color: #718078; font-size: 12px; }
 .ocr-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .ocr-progress { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 9px; margin-top: 16px; color: #52675a; font-size: 13px; }
+.ocr-progress[hidden] { display: none !important; }
 .ocr-progress-track { grid-column: 1 / -1; height: 5px; background: #e5ece7; border-radius: 8px; overflow: hidden; }
 .ocr-progress-track div { height: 100%; width: 0; background: #43855d; transition: width .4s; }
+.ocr-progress.is-processing .ocr-progress-track div { width: 35%; animation: ocr-progress-scan 1.3s ease-in-out infinite; }
 .ocr-spinner { width: 17px; height: 17px; border: 2px solid #d8e4dc; border-top-color: #43855d; border-radius: 50%; animation: ocr-spin .8s linear infinite; }
 @keyframes ocr-spin { to { transform: rotate(360deg); } }
+@keyframes ocr-progress-scan { from { transform: translateX(-110%); } to { transform: translateX(310%); } }
 .ocr-message { margin: 10px 0 0; font-size: 13px; }
 .ocr-message:empty { display: none; }
+.ocr-message[hidden] { display: none !important; }
 .ocr-message.error { color: #a23b3b; }
 .ocr-message.success { color: #327047; }
 .ocr-review { margin-top: 20px; padding-top: 18px; border-top: 1px solid #e3eae5; }

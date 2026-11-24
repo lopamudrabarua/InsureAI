@@ -6,6 +6,7 @@ import numpy as np
 import joblib
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 import shutil
 from io import BytesIO
@@ -88,37 +89,177 @@ def run_ocr(image):
 
 
 def structure_claim_text(text):
-    patterns = {
-        "claimant_name": [r"(?:(?:patient|claimant|insured|customer)(?:\s+name)?|name)\s*[:#-]?\s*([A-Z][A-Za-z .'-]{2,})"],
-        "policy_number": [r"(?:policy(?:\s*(?:no|number))?)\s*[:#-]?\s*([A-Z0-9/-]{4,})"],
-        "claim_number": [r"(?:claim\s*(?:no\.?|number|#)|claim\s+id)\s*[:#-]?\s*([A-Z0-9/-]{3,})"],
-        "hospital_workshop_name": [r"(?:hospital|workshop|garage|clinic)(?:\s+name)?\s*[:#-]?\s*([A-Z][A-Za-z0-9 &'.,-]{2,})"],
-        "invoice_number": [r"(?:invoice(?:\s*(?:no\.?|number|#))?|bill(?:\s*(?:no\.?|number|#)|(?=\s*[:#-])))\s*[:#-]?\s*([A-Z0-9/-]{3,})"],
-        "incident_date": [r"(?:date of (?:incident|accident)|incident date)\s*[:#-]?\s*([0-9]{1,4}[./-][0-9]{1,2}[./-][0-9]{1,4})"],
-        "treatment_repair_date": [r"(?:date of (?:treatment|repair)|treatment date|repair date)\s*[:#-]?\s*([0-9]{1,4}[./-][0-9]{1,2}[./-][0-9]{1,4})"],
-        "claim_amount": [r"(?:claim amount|amount claimed)\s*[:#-]?\s*(?:[$₹])?\s*([\d,]+(?:\.\d{1,2})?)"],
-        "total_bill_amount": [r"(?:grand total|total bill amount|total bill|total amount|amount due)\s*[:#-]?\s*(?:[$₹])?\s*([\d,]+(?:\.\d{1,2})?)"],
-        "description_of_incident": [r"(?:incident description|description of incident|accident details)\s*[:#-]?\s*(.{5,180})"],
-        "contact_information": [r"(?:\+?\d[\d ()-]{7,}\d|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})"]
+    """Extract labelled vehicle-claim fields without crossing into adjacent fields."""
+    lines = [re.sub(r"[\t\u00a0]+", " ", line).strip() for line in text.splitlines()]
+    lines = [re.sub(r" {2,}", " ", line) for line in lines if line.strip()]
+
+    aliases = {
+        "policyholder_name": [
+            "policyholder name", "policy holder name", "name of insured", "insured person's name",
+            "insured person name", "insured name", "policyholder", "policy holder", "insured",
+            "policyholder:", "policy holder:", "name of insured:", "insured name:", "insured:"
+        ],
+        "policy_number": [
+            "policy number", "policy no", "policy #", "policy id",
+            "policy number:", "policy no:", "policy #:", "policy id:"
+        ],
+        "claim_number": [
+            "claim number / reference", "claim reference number", "claim number", "claim no",
+            "claim #", "claim id", "claim reference", "claim / reference", "claim ref",
+            "claim number:", "claim reference:", "claim no:", "claim #:", "claim id:", "claim ref:"
+        ],
+        "member_id": ["member id", "member number", "member no", "member id:", "member number:", "member no:"],
+        "claim_type": [
+            "claim type", "type of claim", "claim category", "nature of claim",
+            "claim type:", "type of claim:", "claim category:", "nature of claim:"
+        ],
+        "incident_date": [
+            "incident date", "accident date", "date of accident", "date of loss",
+            "accident / loss date", "loss date", "incident date:", "accident date:",
+            "date of accident:", "date of loss:", "loss date:"
+        ],
+        "vehicle_release_date": [
+            "vehicle release date", "release date", "date vehicle released",
+            "vehicle release date:", "release date:", "date vehicle released:"
+        ],
+        "vehicle_damage_description": [
+            "vehicle damage description", "damage description", "description of damage",
+            "vehicle damage", "damage to vehicle", "vehicle damage description:",
+            "damage description:", "description of damage:", "vehicle damage:",
+            "damage to vehicle:"
+        ],
+        "surveyor_name": [
+            "surveyor name", "appointed surveyor", "surveyor", "loss assessor name",
+            "surveyor:", "appointed surveyor:", "surveyor name:", "loss assessor:",
+            "loss assessor name:", "assessor:", "assessor name:"
+        ],
+        "repair_garage_name": [
+            "repair garage name", "garage name", "workshop name", "repairer name",
+            "repair garage", "repairer", "workshop", "repair garage name:",
+            "garage name:", "workshop name:", "repairer name:", "repair garage:",
+            "repairer:", "workshop:"
+        ],
+        "repair_garage_address": [
+            "repair garage address", "garage address", "workshop address", "repairer address",
+            "repair garage address:", "garage address:", "workshop address:",
+            "repairer address:"
+        ],
+        "total_repair_estimate": [
+            "total repair estimate", "total repair cost", "estimated repair cost",
+            "repair estimate", "amount claimed", "estimated claim amount", "claim amount",
+            "total repair estimate:", "total repair cost:", "estimated repair cost:",
+            "repair estimate:", "amount claimed:", "estimated claim amount:", "claim amount:"
+        ],
+        "vehicle_inspection_date": [
+            "date of vehicle inspection", "vehicle inspection date", "inspection date",
+            "date inspected", "survey date", "date of vehicle inspection:",
+            "vehicle inspection date:", "inspection date:", "date inspected:",
+            "survey date:"
+        ],
+        "invoice_number": [
+            "invoice number", "invoice no", "invoice #", "bill number", "bill no", "bill #",
+            "invoice number:", "invoice no:", "invoice #:", "bill number:",
+            "bill no:", "bill #:"
+        ],
     }
-    fields, confidence = {}, {}
-    for field, expressions in patterns.items():
-        if field == "contact_information":
-            email = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text)
-            phone = re.search(r"\+?\d[\d ()-]{7,}\d", text)
-            phone_digits = re.sub(r"\D", "", phone.group(0)) if phone else ""
-            value = email.group(0) if email else (phone.group(0) if 10 <= len(phone_digits) <= 15 else None)
-            fields[field] = value
-            confidence[field] = None
-            continue
-        match = next((m for pattern in expressions if (m := re.search(pattern, text, re.I | re.M))), None)
-        value = match.group(1).strip(" .,:;\n") if match and match.lastindex else (match.group(0).strip() if match else None)
-        fields[field] = value
-        confidence[field] = None
-    for field in ("claim_amount", "total_bill_amount"):
-        if fields[field]:
-            fields[field] = float(fields[field].replace(",", ""))
-    return fields, confidence
+    normalized_aliases = {key: sorted(set(value), key=len, reverse=True) for key, value in aliases.items()}
+    all_aliases = sorted({alias for group in normalized_aliases.values() for alias in group}, key=len, reverse=True)
+
+    def alias_pattern(items):
+        return re.compile(r"(?<![\w])(?:" + "|".join(re.escape(alias).replace(r"\ ", r"\s+") for alias in items) + r")(?![\w])", re.I)
+
+    label_pattern = alias_pattern(all_aliases)
+    field_patterns = {key: alias_pattern(value) for key, value in normalized_aliases.items()}
+
+    def extract_labelled(key, multiline=False):
+        pattern = field_patterns[key]
+        for line_index, line in enumerate(lines):
+            match = pattern.search(line)
+            if not match:
+                continue
+            value = line[match.end():].lstrip(" \t:#=–—-/").strip(" \t:;,.|-")
+            if not value and line_index + 1 < len(lines):
+                next_line = lines[line_index + 1]
+                if not label_pattern.search(next_line):
+                    value = next_line.strip(" \t:#=–—-/;,.|")
+                    line_index += 1
+            if value:
+                next_label = label_pattern.search(value)
+                if next_label:
+                    value = value[:next_label.start()].strip(" \t:#=–—-/;,.|")
+            parts = [value] if value else []
+            if multiline:
+                for following in lines[line_index + 1:]:
+                    if label_pattern.search(following):
+                        break
+                    parts.append(following.strip())
+            value = " ".join(part for part in parts if part).strip(" \t:#=–—-/;,.|")
+            if value:
+                return value
+        return ""
+
+    def identifier(value):
+        value = re.sub(r"\s+", "", value)
+        return value if re.fullmatch(r"[A-Z0-9][A-Z0-9./_-]{2,49}", value, re.I) else ""
+
+    def parse_date(value):
+        match = re.search(r"\b\d{1,4}[./-]\d{1,2}[./-]\d{2,4}\b|\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b", value)
+        if not match:
+            return ""
+        raw = match.group(0)
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%d %b %Y", "%d %B %Y"):
+            try:
+                parsed = datetime.strptime(raw, fmt).date()
+                return parsed.isoformat() if 1900 <= parsed.year <= 2100 else ""
+            except ValueError:
+                continue
+        return ""
+
+    def parse_money(value):
+        match = re.search(r"(?<!\w)(?:INR|Rs\.?|₹|\$|USD|EUR|€|GBP|£)?\s*([\d,]+(?:\.\d{1,2})?)(?!\w)", value, re.I)
+        if not match:
+            return "", ""
+        try:
+            amount = round(float(match.group(1).replace(",", "")), 2)
+        except ValueError:
+            return "", ""
+        original = match.group(0).strip()
+        return amount, original
+
+    raw_values = {key: extract_labelled(key, multiline=key in {"vehicle_damage_description", "repair_garage_address"}) for key in aliases}
+    fields = {
+        "policyholder_name": raw_values["policyholder_name"],
+        "insured_person_name": raw_values["policyholder_name"],
+        "policy_number": identifier(raw_values["policy_number"]),
+        "claim_number": identifier(raw_values["claim_number"]),
+        "member_id": identifier(raw_values["member_id"]),
+        "contact_information": "",
+        "claim_type": raw_values["claim_type"],
+        "incident_date": parse_date(raw_values["incident_date"]),
+        "vehicle_release_date": parse_date(raw_values["vehicle_release_date"]),
+        "vehicle_damage_description": raw_values["vehicle_damage_description"],
+        "surveyor_name": raw_values["surveyor_name"],
+        "repair_garage_name": raw_values["repair_garage_name"],
+        "repair_garage_address": raw_values["repair_garage_address"],
+        "vehicle_inspection_date": parse_date(raw_values["vehicle_inspection_date"]),
+        "invoice_number": identifier(raw_values["invoice_number"]),
+    }
+    fields["amount_claimed"], amount_original = parse_money(raw_values["total_repair_estimate"])
+    fields["total_repair_estimate"] = fields["amount_claimed"]
+    email = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text)
+    phone = re.search(r"(?<!\w)\+?\d[\d ()-]{7,}\d(?!\w)", text)
+    digits = re.sub(r"\D", "", phone.group(0)) if phone else ""
+    fields["contact_information"] = email.group(0) if email else (phone.group(0).strip() if 10 <= len(digits) <= 15 else "")
+
+    # Preserve normalized values for existing consumers, and retain source spelling/currency for audit.
+    original_values = {key: value for key, value in raw_values.items() if value}
+    if amount_original:
+        original_values["total_repair_estimate"] = amount_original
+        original_values["amount_claimed"] = amount_original
+    original_values.update({key: fields[key] for key in ("incident_date", "vehicle_release_date", "vehicle_inspection_date") if fields[key]})
+    confidence = {key: None for key in fields}
+    statuses = {key: ("needs_review" if value not in ("", None) else "not_found") for key, value in fields.items()}
+    return fields, confidence, statuses, original_values
 
 
 @app.errorhandler(413)
@@ -189,11 +330,12 @@ def ocr_claim_document():
         extracted_text = "\n".join(lines).strip()
         if not extracted_text:
             return jsonify({"status": "error", "message": "No readable text was found. Try a clearer image or enter claim details manually."}), 422
-        fields, field_confidence = structure_claim_text(extracted_text)
+        fields, field_confidence, field_status, original_values = structure_claim_text(extracted_text)
         return jsonify({"status": "success", "extracted_text": extracted_text,
                         "claim_information": fields, "confidence_scores": field_confidence,
+                        "extraction_status": field_status, "original_values": original_values,
                         "ocr_confidence": round(sum(scores) / len(scores), 3) if scores else None,
-                        "fields_requiring_verification": list(fields.keys()),
+                        "fields_requiring_verification": [key for key, value in fields.items() if value not in ("", None)],
                         "pages_processed": page_count})
     except pytesseract.TesseractNotFoundError:
         return jsonify({"status": "error", "message": "Tesseract is not installed on the backend. Install the tesseract-ocr system package."}), 503
@@ -291,22 +433,24 @@ def home():
 # PREPARE INPUT DATA
 # ==========================================
 
+# Default values for legacy fields removed from the vehicle-insurance frontend
+LEGACY_FIELD_DEFAULTS = {
+    "insured_hobbies": "driving",
+    "capital-gains": 0,
+    "capital-loss": 0,
+}
+
+
 def prepare_input(data, features, model):
 
-    missing = [
-        feature for feature in features
-        if feature not in data
-    ]
-
-    if missing:
-        raise ValueError(
-            "Missing required fields: " + ", ".join(missing)
-        )
-
-    row = {
-        feature: data[feature]
-        for feature in features
-    }
+    row = {}
+    for feature in features:
+        if feature in data:
+            row[feature] = data[feature]
+        elif feature in LEGACY_FIELD_DEFAULTS:
+            row[feature] = LEGACY_FIELD_DEFAULTS[feature]
+        else:
+            raise ValueError(f"Missing required field: {feature}")
 
     df_input = pd.DataFrame(
         [row],
@@ -439,9 +583,17 @@ def get_risk_band(probability):
 # ==========================================
 
 def get_rl_decision(risk_state, complexity):
+    """
+    Determine claim decision using trained Q-table.
 
+    Uses risk_band (Low/Medium/High) and complexity (Low/Medium/High)
+    to look up the optimal action from the Q-table trained via
+    Q-learning on historical claim data.
+    """
+    # Use risk_band (3-level) for Q-table lookup
     if risk_state not in q_table.index:
-        raise ValueError("Invalid risk state in Q-table")
+        # Fallback for any unexpected risk state
+        return "Review"
 
     best_action = (
         q_table.loc[risk_state]
@@ -449,12 +601,16 @@ def get_rl_decision(risk_state, complexity):
         .idxmax()
     )
 
+    # Apply domain-informed overrides only for clear-cut cases
+    # High fraud risk always warrants investigation
     if risk_state == "High":
         return "Investigate"
 
-    if complexity == "High":
+    # Medium risk + high complexity warrants review
+    if risk_state == "Medium" and complexity == "High":
         return "Review"
 
+    # Otherwise trust the learned Q-table policy
     return best_action
 
 
